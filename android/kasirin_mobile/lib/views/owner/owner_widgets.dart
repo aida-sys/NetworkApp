@@ -1,11 +1,139 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+
+import '../../providers.dart';
 
 const ownerInk = Color(0xFF17212B);
 const ownerMuted = Color(0xFF64748B);
 const ownerBlue = Color(0xFF0877B9);
 const ownerCanvas = Color(0xFFF5F7FA);
 const ownerBorder = Color(0xFFE4E9EF);
+
+class TrialBanner extends ConsumerStatefulWidget {
+  const TrialBanner({super.key});
+
+  @override
+  ConsumerState<TrialBanner> createState() => _TrialBannerState();
+}
+
+class _TrialBannerState extends ConsumerState<TrialBanner>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _ticker = AnimationController(
+    vsync: this,
+    duration: const Duration(seconds: 14),
+  )..repeat();
+
+  @override
+  void dispose() {
+    _ticker.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (ref.watch(billingLicenseActiveProvider).asData?.value == true) {
+      return const SizedBox.shrink();
+    }
+    return ref
+        .watch(trialStatusProvider)
+        .when(
+          data: (trial) {
+            final expired = !trial.active;
+            final message = expired
+                ? 'MODE TRIAL BERAKHIR - Aktivasi diperlukan untuk transaksi.'
+                : 'MODE TRIAL 7 HARI - Sisa ${trial.remaining.inDays} hari - Ketuk untuk aktivasi.';
+            return _buildTickerBanner(
+              context,
+              message,
+              expired ? const Color(0xFF8A2C20) : const Color(0xFF8A4B08),
+              expired ? Icons.warning_amber_rounded : Icons.timelapse,
+            );
+          },
+          loading: () => _buildTickerBanner(
+            context,
+            'MEMERIKSA STATUS TRIAL - Mohon tunggu sebentar.',
+            const Color(0xFF8A4B08),
+            Icons.timelapse,
+          ),
+      error: (_, _) => _buildTickerBanner(
+            context,
+            'STATUS TRIAL TIDAK TERSEDIA - Ketuk untuk aktivasi.',
+            const Color(0xFF8A2C20),
+            Icons.warning_amber_rounded,
+          ),
+        );
+  }
+
+  Widget _buildTickerBanner(
+    BuildContext context,
+    String message,
+    Color color,
+    IconData icon,
+  ) {
+    return Material(
+      color: color,
+      child: InkWell(
+        onTap: () => context.go('/license'),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          child: Row(
+            children: [
+              Icon(icon, color: Colors.white),
+              const SizedBox(width: 10),
+              Expanded(
+                child: _TrialTicker(text: message, controller: _ticker),
+              ),
+              const Icon(Icons.chevron_right, color: Colors.white),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _TrialTicker extends StatelessWidget {
+  const _TrialTicker({required this.text, required this.controller});
+
+  final String text;
+  final AnimationController controller;
+
+  @override
+  Widget build(BuildContext context) {
+    const style = TextStyle(
+      color: Colors.white,
+      fontWeight: FontWeight.w700,
+      fontSize: 13,
+    );
+    final painter = TextPainter(
+      text: TextSpan(text: text, style: style),
+      textDirection: TextDirection.ltr,
+      maxLines: 1,
+    )..layout();
+    final gap = painter.width * 0.2 + 24;
+    final cycleWidth = painter.width + gap;
+
+    return ClipRect(
+      child: AnimatedBuilder(
+        animation: controller,
+        builder: (context, child) => Transform.translate(
+          offset: Offset(-cycleWidth * controller.value, 0),
+          child: child,
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(text, style: style, maxLines: 1, softWrap: false),
+            SizedBox(width: gap),
+            Text(text, style: style, maxLines: 1, softWrap: false),
+            SizedBox(width: gap),
+          ],
+        ),
+      ),
+    );
+  }
+}
 
 class OwnerScaffold extends StatelessWidget {
   const OwnerScaffold({
@@ -29,8 +157,26 @@ class OwnerScaffold extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final tableTheme = Theme.of(context).dataTableTheme.copyWith(
+      headingRowColor: const WidgetStatePropertyAll(Color(0xFFEAF1F6)),
+      dataRowColor: const WidgetStatePropertyAll(Colors.white),
+      headingTextStyle: const TextStyle(
+        color: ownerInk,
+        fontSize: 13,
+        fontWeight: FontWeight.w700,
+      ),
+      dataTextStyle: const TextStyle(color: ownerInk, fontSize: 14),
+      dividerThickness: 1,
+      headingRowHeight: 52,
+      dataRowMinHeight: 54,
+      dataRowMaxHeight: 72,
+      horizontalMargin: 16,
+      columnSpacing: 24,
+    );
+
     return Scaffold(
       backgroundColor: ownerCanvas,
+      bottomNavigationBar: const SafeArea(top: false, child: TrialBanner()),
       drawer: Drawer(
         child: SafeArea(
           child: ListView(
@@ -138,20 +284,29 @@ class OwnerScaffold extends StatelessWidget {
         ),
         actions: [...actions, const SizedBox(width: 12)],
       ),
-      body: Stack(
+      body: Column(
         children: [
-          SafeArea(
-            top: false,
-            child: Align(
-              alignment: Alignment.topCenter,
-              child: ConstrainedBox(
-                constraints: BoxConstraints(maxWidth: maxWidth),
-                child: SizedBox(width: double.infinity, child: body),
+          Expanded(
+            child: Theme(
+              data: Theme.of(context).copyWith(dataTableTheme: tableTheme),
+              child: Stack(
+                children: [
+                  SafeArea(
+                    top: false,
+                    child: Align(
+                      alignment: Alignment.topCenter,
+                      child: ConstrainedBox(
+                        constraints: BoxConstraints(maxWidth: maxWidth),
+                        child: SizedBox(width: double.infinity, child: body),
+                      ),
+                    ),
+                  ),
+                  if (onAdd != null)
+                    _MovableAddAction(label: addLabel, onPressed: onAdd!),
+                ],
               ),
             ),
           ),
-          if (onAdd != null)
-            _MovableAddAction(label: addLabel, onPressed: onAdd!),
         ],
       ),
     );

@@ -98,15 +98,24 @@ class BillingClient:
         self, posreq_content: str, customer_token: str
     ) -> str:
         """Kirim .posreq, kembalikan device_token untuk polling."""
+        return self.register_device_details(posreq_content, customer_token)[
+            "device_token"
+        ]
+
+    def register_device_details(
+        self, posreq_content: str, customer_token: str
+    ) -> dict[str, Any]:
+        """Register a device and return its id plus polling token."""
         data = self._post(
             "/api/pos/register",
             {"posreq": posreq_content},
             token=customer_token,
         ).json()
         device_token = data.get("device_token")
-        if not device_token:
+        device_pk = data.get("device_pk")
+        if not device_token or not device_pk:
             raise BillingError("Pendaftaran perangkat tidak berhasil.")
-        return str(device_token)
+        return {"device_token": str(device_token), "device_pk": int(device_pk)}
 
     def poll_license(self, device_token: str) -> dict[str, Any]:
         """Kembalikan {"status": str, "document": dict | None}."""
@@ -122,3 +131,17 @@ class BillingClient:
         return self._get(
             "/api/pos/status", token=(device_token or "").strip() or None
         ).json()
+
+    def create_checkout(
+        self, customer_token: str, device_pk: int, plan_code: str
+    ) -> dict[str, Any]:
+        """Create a hosted payment session for a registered POS device."""
+        data = self._post(
+            "/api/checkout/create",
+            {"device_pk": int(device_pk), "plan_code": str(plan_code)},
+            token=customer_token,
+        ).json()
+        payment_url = data.get("payment_url")
+        if not payment_url:
+            raise BillingError("Server tidak mengembalikan tautan pembayaran.")
+        return data

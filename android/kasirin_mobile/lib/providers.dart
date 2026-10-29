@@ -1,12 +1,14 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 import 'data/local_database.dart';
 import 'domain/password_hasher.dart';
 import 'domain/pos_repository.dart';
 import 'services/billing_client.dart';
 import 'services/billing_config.dart';
+import 'services/trial_service.dart';
 import 'views/auth/auth_state.dart';
 import 'views/auth/login_view.dart';
 import 'views/auth/license_view.dart';
@@ -39,7 +41,10 @@ final repositoryFutureProvider = FutureProvider<PosRepository>((ref) async {
 
 final billingConfigProvider = Provider<BillingConfig>((ref) {
   return BillingConfig(
-    baseUrl: 'https://trimester-slaw-papaya.ngrok-free.dev',
+    baseUrl: const String.fromEnvironment(
+      'BILLING_BASE_URL',
+      defaultValue: 'https://trimester-slaw-papaya.ngrok-free.dev',
+    ),
     apiPrefix: '',
   );
 });
@@ -47,6 +52,31 @@ final billingConfigProvider = Provider<BillingConfig>((ref) {
 final billingClientProvider = Provider<BillingClient>((ref) {
   return BillingClient(ref.watch(billingConfigProvider));
 });
+
+final billingLicenseActiveProvider = FutureProvider<bool>((ref) async {
+  final token = await ref
+      .watch(secureStorageProvider)
+      .read(key: 'billing.device_token');
+  if (token == null || token.isEmpty) return false;
+  try {
+    final result =
+        await ref.watch(billingClientProvider).checkLicense(bearerToken: token)
+            as Map;
+    return result['status'] == 'active';
+  } catch (_) {
+    return false;
+  }
+});
+
+final secureStorageProvider = Provider<FlutterSecureStorage>(
+  (ref) => const FlutterSecureStorage(),
+);
+final trialServiceProvider = Provider<TrialService>(
+  (ref) => TrialService(ref.watch(secureStorageProvider)),
+);
+final trialStatusProvider = FutureProvider<TrialStatus>(
+  (ref) => ref.watch(trialServiceProvider).status(),
+);
 
 // --- Auth ---
 
@@ -58,38 +88,55 @@ final authNotifierProvider = NotifierProvider<AuthNotifier, AuthState>(() {
 
 final themeProvider = Provider(
   (ref) => ThemeData(
-    primarySwatch: Colors.blue,
     useMaterial3: true,
-    scaffoldBackgroundColor: Colors.white,
-    textTheme: const TextTheme(
-      displayLarge: TextStyle(
-        fontSize: 32,
-        fontWeight: FontWeight.bold,
-        color: Colors.black87,
-      ),
-      titleLarge: TextStyle(
-        fontSize: 24,
-        fontWeight: FontWeight.w600,
-        color: Colors.black87,
-      ),
-      bodyLarge: TextStyle(fontSize: 16, color: Colors.black87),
-      bodyMedium: TextStyle(fontSize: 14, color: Colors.black87),
-      labelLarge: TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
+    brightness: Brightness.dark,
+    scaffoldBackgroundColor: const Color(0xFF0B1326),
+    colorScheme: const ColorScheme.dark(
+      primary: Color(0xFF6DFFBA),
+      onPrimary: Color(0xFF003822),
+      primaryContainer: Color(0xFF00E599),
+      secondary: Color(0xFFC0C1FF),
+      surface: Color(0xFF0B1326),
+      error: Color(0xFFFFB4AB),
+      onSurface: Color(0xFFDAE2FD),
     ),
+    appBarTheme: const AppBarTheme(
+      backgroundColor: Color(0xFF060E20),
+      foregroundColor: Color(0xFFDAE2FD),
+      surfaceTintColor: Colors.transparent,
+      elevation: 0,
+    ),
+    cardTheme: CardThemeData(
+      color: const Color(0xFF171F33),
+      surfaceTintColor: Colors.transparent,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+    ),
+    textTheme:
+        const TextTheme(
+          displayLarge: TextStyle(fontSize: 32, fontWeight: FontWeight.bold),
+          titleLarge: TextStyle(fontSize: 24, fontWeight: FontWeight.w700),
+          bodyLarge: TextStyle(fontSize: 16),
+          bodyMedium: TextStyle(fontSize: 14),
+          labelLarge: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+        ).apply(
+          fontFamily: 'Inter',
+          bodyColor: const Color(0xFFDAE2FD),
+          displayColor: const Color(0xFFDAE2FD),
+        ),
     inputDecorationTheme: InputDecorationTheme(
       filled: true,
-      fillColor: Colors.grey.shade100,
+      fillColor: const Color(0xFF131B2E),
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(8),
-        borderSide: BorderSide.none,
+        borderSide: const BorderSide(color: Color(0xFF3B4A41)),
       ),
       enabledBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(8),
-        borderSide: BorderSide(color: Colors.grey.shade300),
+        borderSide: const BorderSide(color: Color(0xFF3B4A41)),
       ),
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(8),
-        borderSide: BorderSide(color: Colors.blue, width: 2),
+        borderSide: const BorderSide(color: Color(0xFF6DFFBA), width: 2),
       ),
     ),
   ),
@@ -105,7 +152,8 @@ final routerProvider = Provider<GoRouter>((ref) {
       final authState = ref.read(authNotifierProvider);
       if (!authState.isAuthenticated &&
           state.matchedLocation != '/login' &&
-          state.matchedLocation != '/setup') {
+          state.matchedLocation != '/setup' &&
+          state.matchedLocation != '/license') {
         return '/login';
       }
       if (authState.isAuthenticated &&

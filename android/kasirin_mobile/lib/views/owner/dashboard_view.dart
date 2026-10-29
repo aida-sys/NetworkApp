@@ -8,6 +8,95 @@ import 'package:intl/intl.dart';
 import '../../providers.dart';
 import 'owner_widgets.dart';
 
+class _DashboardPalette {
+  const _DashboardPalette({
+    required this.name,
+    required this.background,
+    required this.surface,
+    required this.surfaceRaised,
+    required this.text,
+    required this.muted,
+    required this.accent,
+    required this.accentText,
+    required this.border,
+    required this.gradientEnd,
+  });
+
+  final String name;
+  final Color background;
+  final Color surface;
+  final Color surfaceRaised;
+  final Color text;
+  final Color muted;
+  final Color accent;
+  final Color accentText;
+  final Color border;
+  final Color gradientEnd;
+
+  static const options = <_DashboardPalette>[
+    _DashboardPalette(
+      name: 'Dark Emerald',
+      background: Color(0xFF0B1326),
+      surface: Color(0xFF171F33),
+      surfaceRaised: Color(0xFF222A3D),
+      text: Color(0xFFDAE2FD),
+      muted: Color(0xFFBACBBE),
+      accent: Color(0xFF6DFFBA),
+      accentText: Color(0xFF003822),
+      border: Color(0xFF3B4A41),
+      gradientEnd: Color(0xFF222A3D),
+    ),
+    _DashboardPalette(
+      name: 'Ocean Blue',
+      background: Color(0xFF091722),
+      surface: Color(0xFF12283A),
+      surfaceRaised: Color(0xFF1C354A),
+      text: Color(0xFFE7F5FF),
+      muted: Color(0xFFB3CDDC),
+      accent: Color(0xFF55C8FF),
+      accentText: Color(0xFF062235),
+      border: Color(0xFF31536A),
+      gradientEnd: Color(0xFF1C354A),
+    ),
+    _DashboardPalette(
+      name: 'Light Slate',
+      background: Color(0xFFF2F5F9),
+      surface: Color(0xFFFFFFFF),
+      surfaceRaised: Color(0xFFE7EDF4),
+      text: Color(0xFF1D2939),
+      muted: Color(0xFF526174),
+      accent: Color(0xFF0877B9),
+      accentText: Color(0xFFFFFFFF),
+      border: Color(0xFFD3DCE7),
+      gradientEnd: Color(0xFFE7EDF4),
+    ),
+    _DashboardPalette(
+      name: 'Warm Amber',
+      background: Color(0xFF21170F),
+      surface: Color(0xFF302116),
+      surfaceRaised: Color(0xFF45301E),
+      text: Color(0xFFFFF3E0),
+      muted: Color(0xFFD8C2A5),
+      accent: Color(0xFFFFC266),
+      accentText: Color(0xFF382100),
+      border: Color(0xFF674B30),
+      gradientEnd: Color(0xFF45301E),
+    ),
+    _DashboardPalette(
+      name: 'Plum Night',
+      background: Color(0xFF1B1426),
+      surface: Color(0xFF2A1E3A),
+      surfaceRaised: Color(0xFF3A2B4F),
+      text: Color(0xFFF4EAFE),
+      muted: Color(0xFFC9B8DB),
+      accent: Color(0xFFD6A5FF),
+      accentText: Color(0xFF301344),
+      border: Color(0xFF59446F),
+      gradientEnd: Color(0xFF3A2B4F),
+    ),
+  ];
+}
+
 class DashboardView extends ConsumerStatefulWidget {
   const DashboardView({super.key});
 
@@ -33,12 +122,80 @@ class _DashboardViewState extends ConsumerState<DashboardView> {
   };
   String _storeName = 'Toko Kasirin';
   String? _storeLogoPath;
-  String? _storeBannerPath;
+  _DashboardPalette _palette = _DashboardPalette.options.first;
 
   @override
   void initState() {
     super.initState();
+    _loadDashboardPalette();
     _loadDashboardData();
+  }
+
+  Future<void> _loadDashboardPalette() async {
+    final storage = ref.read(secureStorageProvider);
+    final savedName = await storage.read(key: 'dashboard_palette');
+    if (!mounted || savedName == null) return;
+    final savedPalette = _DashboardPalette.options
+        .cast<_DashboardPalette?>()
+        .firstWhere(
+          (palette) => palette?.name == savedName,
+          orElse: () => null,
+        );
+    if (savedPalette != null) setState(() => _palette = savedPalette);
+  }
+
+  Future<void> _selectDashboardPalette(_DashboardPalette palette) async {
+    setState(() => _palette = palette);
+    await ref
+        .read(secureStorageProvider)
+        .write(key: 'dashboard_palette', value: palette.name);
+  }
+
+  Future<void> _showDashboardPalettePicker() async {
+    await showModalBottomSheet<void>(
+      context: context,
+      useSafeArea: true,
+      builder: (sheetContext) => Padding(
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Tema Dashboard',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+            ),
+            const SizedBox(height: 8),
+            const Text('Pilih warna latar dan teks yang nyaman dibaca.'),
+            const SizedBox(height: 12),
+            for (final palette in _DashboardPalette.options)
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: CircleAvatar(
+                  backgroundColor: palette.background,
+                  child: Icon(Icons.circle, color: palette.accent),
+                ),
+                title: Text(palette.name),
+                subtitle: Text(
+                  'Teks ${palette.text == const Color(0xFFFFFFFF)
+                      ? 'terang'
+                      : palette.name == 'Light Slate'
+                      ? 'gelap'
+                      : 'kontras'}',
+                  style: TextStyle(color: palette.muted),
+                ),
+                trailing: _palette.name == palette.name
+                    ? Icon(Icons.check_circle, color: palette.accent)
+                    : null,
+                onTap: () {
+                  _selectDashboardPalette(palette);
+                  Navigator.pop(sheetContext);
+                },
+              ),
+          ],
+        ),
+      ),
+    );
   }
 
   Future<void> _loadDashboardData() async {
@@ -53,7 +210,6 @@ class _DashboardViewState extends ConsumerState<DashboardView> {
           if (store != null) {
             _storeName = store.read<String>('name');
             _storeLogoPath = store.read<String?>('logo_path');
-            _storeBannerPath = store.read<String?>('banner_path');
           }
         });
       }
@@ -182,153 +338,14 @@ class _DashboardViewState extends ConsumerState<DashboardView> {
         color: const Color(0xFF0877B9),
         route: '/license',
       ),
-    ];
-
-    final ownerIdentity = Row(
-      children: [
-        CircleAvatar(
-          radius: 28,
-          backgroundColor: ownerBlue.withValues(alpha: .1),
-          backgroundImage: _storeLogoPath == null
-              ? null
-              : FileImage(File(_storeLogoPath!)),
-          child: _storeLogoPath == null
-              ? const Icon(Icons.person_rounded, size: 30, color: ownerBlue)
-              : null,
-        ),
-        const SizedBox(width: 14),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                _storeName,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w600,
-                  color: ownerBlue,
-                ),
-              ),
-              const SizedBox(height: 2),
-              Text(
-                authState.fullName ?? 'Pemilik Toko',
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                  color: ownerInk,
-                ),
-              ),
-              const SizedBox(height: 5),
-              Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 3,
-                    ),
-                    decoration: BoxDecoration(
-                      color: ownerBlue.withValues(alpha: .08),
-                      borderRadius: BorderRadius.circular(7),
-                    ),
-                    child: Text(
-                      authState.role ?? 'OWNER',
-                      style: const TextStyle(
-                        fontSize: 10,
-                        fontWeight: FontWeight.bold,
-                        color: ownerBlue,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      '@${authState.username ?? 'user'}',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(fontSize: 12, color: ownerMuted),
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
-    final cashierAction = FilledButton.icon(
-      onPressed: () => context.go('/cashier'),
-      icon: const Icon(Icons.point_of_sale_rounded, size: 18),
-      label: const Text('Buka Kasir'),
-    );
-    final ownerCard = OwnerSurface(
-      padding: EdgeInsets.zero,
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(16),
-        child: Stack(
-          children: [
-            if (_storeBannerPath != null)
-              Positioned.fill(
-                child: Image.file(
-                  File(_storeBannerPath!),
-                  fit: BoxFit.cover,
-                  errorBuilder: (_, _, _) => const SizedBox.shrink(),
-                ),
-              ),
-            const Positioned.fill(child: ColoredBox(color: Color(0x26000000))),
-            Padding(
-              padding: const EdgeInsets.all(12),
-              child: Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: .74),
-                  borderRadius: BorderRadius.circular(14),
-                ),
-                child: LayoutBuilder(
-                  builder: (context, constraints) => constraints.maxWidth < 520
-                      ? Column(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            ownerIdentity,
-                            if (authState.isOwner) ...[
-                              const SizedBox(height: 16),
-                              cashierAction,
-                            ],
-                          ],
-                        )
-                      : Row(
-                          children: [
-                            Expanded(child: ownerIdentity),
-                            if (authState.isOwner) ...[
-                              const SizedBox(width: 20),
-                              cashierAction,
-                            ],
-                          ],
-                        ),
-                ),
-              ),
-            ),
-            if (authState.isOwner)
-              Positioned(
-                top: 3,
-                right: 3,
-                child: IconButton(
-                  tooltip: 'Edit identitas toko',
-                  onPressed: () => context.go('/store-settings'),
-                  icon: const Icon(Icons.edit_outlined, size: 19),
-                  style: IconButton.styleFrom(
-                    backgroundColor: Colors.white.withValues(alpha: .92),
-                    foregroundColor: ownerBlue,
-                  ),
-                ),
-              ),
-          ],
-        ),
+      _DashboardMenuItem(
+        title: 'Tema Dashboard',
+        subtitle: 'Ubah warna dan keterbacaan dashboard',
+        icon: Icons.palette_outlined,
+        color: _palette.accent,
+        route: '__dashboard_theme__',
       ),
-    );
+    ];
 
     return PopScope<Object?>(
       canPop: false,
@@ -339,341 +356,554 @@ class _DashboardViewState extends ConsumerState<DashboardView> {
           });
         }
       },
-      child: Scaffold(
-        backgroundColor: ownerCanvas,
-        drawer: Drawer(
-          child: SafeArea(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(20, 20, 20, 16),
-                  child: Row(
-                    children: [
-                      const CircleAvatar(
-                        backgroundColor: Color(0xFFE7F2F9),
-                        foregroundColor: ownerBlue,
-                        child: Icon(Icons.storefront_rounded),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              _storeName,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(
-                                fontWeight: FontWeight.w700,
-                                fontSize: 16,
-                              ),
-                            ),
-                            Text(
-                              authState.fullName ?? 'Pemilik Toko',
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(
-                                color: ownerMuted,
-                                fontSize: 13,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const Divider(height: 1),
-                Expanded(
-                  child: ListView(
-                    padding: const EdgeInsets.symmetric(vertical: 8),
-                    children: [
-                      for (final item in menuItems)
-                        ListTile(
-                          leading: Icon(item.icon, color: item.color),
-                          title: Text(item.title),
-                          subtitle: Text(item.subtitle),
-                          onTap: () {
-                            Navigator.of(context).pop();
-                            context.go(item.route);
-                          },
-                        ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
+      child: Theme(
+        data: Theme.of(context).copyWith(
+          brightness: _palette.name == 'Light Slate'
+              ? Brightness.light
+              : Brightness.dark,
+          scaffoldBackgroundColor: _palette.background,
+          colorScheme:
+              ColorScheme.fromSeed(
+                seedColor: _palette.accent,
+                brightness: _palette.name == 'Light Slate'
+                    ? Brightness.light
+                    : Brightness.dark,
+                surface: _palette.surface,
+              ).copyWith(
+                primary: _palette.accent,
+                onPrimary: _palette.accentText,
+                onSurface: _palette.text,
+                secondary: _palette.accent,
+              ),
+          textTheme: Theme.of(context).textTheme
+              .apply(bodyColor: _palette.text, displayColor: _palette.text),
+          iconTheme: IconThemeData(color: _palette.text),
+          dividerColor: _palette.border,
         ),
-        appBar: AppBar(
-          title: const Text(
-            'Dashboard',
-            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+        child: Scaffold(
+          backgroundColor: _palette.background,
+          bottomNavigationBar: const SafeArea(
+            top: false,
+            child: TrialBanner(),
           ),
-          actions: [
-            IconButton(
-              icon: const Icon(Icons.refresh),
-              tooltip: 'Segarkan',
-              onPressed: _loadDashboardData,
-            ),
-            IconButton(
-              icon: const Icon(Icons.logout),
-              tooltip: 'Keluar ke login',
-              onPressed: _confirmLogout,
-            ),
-            const SizedBox(width: 8),
-          ],
-        ),
-        body: _isLoading
-            ? const Center(child: CircularProgressIndicator())
-            : Column(
+          drawer: Drawer(
+            backgroundColor: _palette.surface,
+            child: SafeArea(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Center(
-                    child: ConstrainedBox(
-                      constraints: const BoxConstraints(maxWidth: 1120),
-                      child: Padding(
-                        padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
-                        child: ownerCard,
-                      ),
-                    ),
-                  ),
-                  Expanded(
-                    child: SingleChildScrollView(
-                      child: Center(
-                        child: ConstrainedBox(
-                          constraints: const BoxConstraints(maxWidth: 1120),
-                          child: Padding(
-                            padding: const EdgeInsets.all(20),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                const SizedBox(height: 20),
-                                // Stat Cards
-                                LayoutBuilder(
-                                  builder: (context, constraints) {
-                                    final width = constraints.maxWidth < 560
-                                        ? constraints.maxWidth
-                                        : (constraints.maxWidth - 24) / 3;
-                                    return Wrap(
-                                      spacing: 12,
-                                      runSpacing: 12,
-                                      children: [
-                                        SizedBox(
-                                          width: width,
-                                          child: _StatCard(
-                                            title: 'Penjualan Hari Ini',
-                                            value: _rupiahFormat.format(
-                                              _stats['todaySales'] ?? 0,
-                                            ),
-                                            icon: Icons.payments_rounded,
-                                            color: const Color(0xFF18794E),
-                                          ),
-                                        ),
-                                        SizedBox(
-                                          width: width,
-                                          child: _StatCard(
-                                            title: 'Total Produk',
-                                            value:
-                                                '${_stats['productCount'] ?? 0}',
-                                            icon: Icons.inventory_2_rounded,
-                                            color: const Color(0xFF006EAE),
-                                          ),
-                                        ),
-                                        SizedBox(
-                                          width: width,
-                                          child: _StatCard(
-                                            title: 'Shift Aktif',
-                                            value:
-                                                '${_stats['activeShifts'] ?? 0}',
-                                            icon: Icons.timer_rounded,
-                                            color: const Color(0xFF9A6700),
-                                          ),
-                                        ),
-                                      ],
-                                    );
-                                  },
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(20, 20, 20, 16),
+                    child: Row(
+                      children: [
+                        CircleAvatar(
+                          backgroundColor: _palette.surfaceRaised,
+                          foregroundColor: _palette.accent,
+                          child: const Icon(Icons.storefront_rounded),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                _storeName,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: 16,
                                 ),
-                                const SizedBox(height: 28),
-                                if (authState.isOwner &&
-                                    _stats['demoDataPresent'] != true) ...[
-                                  OwnerSurface(
-                                    child: Row(
-                                      children: [
-                                        const Expanded(
-                                          child: Column(
-                                            crossAxisAlignment:
-                                                CrossAxisAlignment.start,
-                                            children: [
-                                              Text(
-                                                'Coba dengan data contoh',
-                                                style: TextStyle(
-                                                  fontWeight: FontWeight.w700,
-                                                  color: ownerInk,
-                                                ),
-                                              ),
-                                              SizedBox(height: 4),
-                                              Text(
-                                                'Isi produk, pembelian, stok, dan transaksi ke database lokal Android ini.',
-                                                style: TextStyle(
-                                                  fontSize: 12,
-                                                  color: ownerMuted,
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-                                        ),
-                                        const SizedBox(width: 12),
-                                        FilledButton(
-                                          onPressed: _isSeedingDemo
-                                              ? null
-                                              : _loadDemoData,
-                                          child: _isSeedingDemo
-                                              ? const SizedBox(
-                                                  width: 18,
-                                                  height: 18,
-                                                  child:
-                                                      CircularProgressIndicator(
-                                                        strokeWidth: 2,
-                                                      ),
-                                                )
-                                              : const Text('Muat data demo'),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                  const SizedBox(height: 28),
-                                ],
-                                const OwnerSectionHeading(
-                                  title: 'Menu Operasional',
-                                  subtitle: 'Semua kebutuhan toko, dalam satu tempat.',
+                              ),
+                              Text(
+                                authState.fullName ?? 'Pemilik Toko',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  color: _palette.muted,
+                                  fontSize: 13,
                                 ),
-                                const SizedBox(height: 16),
-                                // Menu Grid
-                                GridView.builder(
-                                  shrinkWrap: true,
-                                  physics: const NeverScrollableScrollPhysics(),
-                                  gridDelegate:
-                                      const SliverGridDelegateWithMaxCrossAxisExtent(
-                                        maxCrossAxisExtent: 360,
-                                        mainAxisExtent: 148,
-                                        mainAxisSpacing: 14,
-                                        crossAxisSpacing: 14,
-                                      ),
-                                  itemCount: menuItems.length,
-                                  itemBuilder: (context, index) {
-                                    final item = menuItems[index];
-
-                                    return Container(
-                                      decoration: BoxDecoration(
-                                        color: Colors.white,
-                                        borderRadius: BorderRadius.circular(18),
-                                        border: Border.all(color: ownerBorder),
-                                        boxShadow: const [
-                                          BoxShadow(
-                                            color: Color(0x080F172A),
-                                            blurRadius: 18,
-                                            offset: Offset(0, 5),
-                                          ),
-                                        ],
-                                      ),
-                                      child: Material(
-                                        color: Colors.transparent,
-                                        child: InkWell(
-                                          borderRadius: BorderRadius.circular(
-                                            18,
-                                          ),
-                                          onTap: () => context.go(item.route),
-                                          child: Padding(
-                                            padding: const EdgeInsets.symmetric(
-                                              horizontal: 16,
-                                              vertical: 14,
-                                            ),
-                                            child: Row(
-                                              children: [
-                                                Container(
-                                                  width: 58,
-                                                  height: 58,
-                                                  decoration: BoxDecoration(
-                                                    color: item.color
-                                                        .withValues(alpha: .09),
-                                                    borderRadius:
-                                                        BorderRadius.circular(
-                                                          18,
-                                                        ),
-                                                  ),
-                                                  child: Icon(
-                                                    item.icon,
-                                                    color: item.color,
-                                                    size: 29,
-                                                  ),
-                                                ),
-                                                const SizedBox(width: 14),
-                                                Expanded(
-                                                  child: Column(
-                                                    mainAxisAlignment:
-                                                        MainAxisAlignment
-                                                            .center,
-                                                    crossAxisAlignment:
-                                                        CrossAxisAlignment
-                                                            .start,
-                                                    children: [
-                                                      Text(
-                                                        item.title,
-                                                        maxLines: 2,
-                                                        overflow: TextOverflow
-                                                            .ellipsis,
-                                                        style: const TextStyle(
-                                                          fontSize: 16,
-                                                          height: 1.2,
-                                                          fontWeight:
-                                                              FontWeight.w700,
-                                                          color: ownerInk,
-                                                        ),
-                                                      ),
-                                                      const SizedBox(height: 6),
-                                                      Text(
-                                                        item.subtitle,
-                                                        maxLines: 2,
-                                                        overflow: TextOverflow
-                                                            .ellipsis,
-                                                        style: const TextStyle(
-                                                          fontSize: 12,
-                                                          height: 1.3,
-                                                          color: ownerMuted,
-                                                        ),
-                                                      ),
-                                                    ],
-                                                  ),
-                                                ),
-                                                const SizedBox(width: 8),
-                                                Icon(
-                                                  Icons.arrow_forward_rounded,
-                                                  size: 19,
-                                                  color: item.color.withValues(
-                                                    alpha: .75,
-                                                  ),
-                                                ),
-                                              ],
-                                            ),
-                                          ),
-                                        ),
-                                      ),
-                                    );
-                                  },
-                                ),
-                              ],
-                            ),
+                              ),
+                            ],
                           ),
                         ),
-                      ),
+                      ],
+                    ),
+                  ),
+                  const Divider(height: 1),
+                  Expanded(
+                    child: ListView(
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                      children: [
+                        for (final item in menuItems)
+                          ListTile(
+                            leading: Icon(item.icon, color: _palette.accent),
+                            title: Text(item.title),
+                            subtitle: Text(item.subtitle),
+                            onTap: () {
+                              Navigator.of(context).pop();
+                              if (item.route == '__dashboard_theme__') {
+                                _showDashboardPalettePicker();
+                              } else {
+                                context.go(item.route);
+                              }
+                            },
+                          ),
+                      ],
                     ),
                   ),
                 ],
               ),
+            ),
+          ),
+          appBar: AppBar(
+            backgroundColor: _palette.background,
+            foregroundColor: _palette.text,
+            title: const Text(
+              'Dashboard',
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+            ),
+            actions: [
+              IconButton(
+                icon: const Icon(Icons.settings_outlined),
+                tooltip: 'Tema Dashboard',
+                onPressed: _showDashboardPalettePicker,
+              ),
+              IconButton(
+                icon: const Icon(Icons.refresh),
+                tooltip: 'Segarkan',
+                onPressed: _loadDashboardData,
+              ),
+              IconButton(
+                icon: const Icon(Icons.logout),
+                tooltip: 'Keluar ke login',
+                onPressed: _confirmLogout,
+              ),
+              const SizedBox(width: 8),
+            ],
+          ),
+          body: _isLoading
+              ? const Center(child: CircularProgressIndicator())
+              : Center(
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 920),
+                    child: ListView(
+                      padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(20),
+                            gradient: LinearGradient(
+                              colors: [_palette.surface, _palette.gradientEnd],
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                            ),
+                            border: Border.all(color: _palette.border),
+                          ),
+                          child: Row(
+                            children: [
+                              CircleAvatar(
+                                radius: 25,
+                                backgroundColor: _palette.surfaceRaised,
+                                backgroundImage: _storeLogoPath == null
+                                    ? null
+                                    : FileImage(File(_storeLogoPath!)),
+                                child: _storeLogoPath == null
+                                    ? Icon(
+                                        Icons.storefront_rounded,
+                                        color: _palette.accent,
+                                      )
+                                    : null,
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      _storeName,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: TextStyle(
+                                        color: _palette.text,
+                                        fontSize: 18,
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 3),
+                                    Text(
+                                      '${authState.fullName ?? 'Pengguna'} · ${authState.role ?? 'OWNER'}',
+                                      style: TextStyle(
+                                        color: _palette.muted,
+                                        fontSize: 13,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              if (authState.isOwner)
+                                IconButton(
+                                  tooltip: 'Pengaturan toko',
+                                  onPressed: () =>
+                                      context.go('/store-settings'),
+                                  icon: const Icon(Icons.tune_rounded),
+                                ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        Container(
+                          padding: const EdgeInsets.all(18),
+                          decoration: BoxDecoration(
+                            color: _palette.surface,
+                            borderRadius: BorderRadius.circular(20),
+                            border: Border.all(color: _palette.border),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  Icon(
+                                    Icons.query_stats_rounded,
+                                    color: _palette.accent,
+                                  ),
+                                  const SizedBox(width: 8),
+                                  const Expanded(
+                                    child: Text(
+                                      'Penjualan hari ini',
+                                      style: TextStyle(
+                                        fontWeight: FontWeight.w700,
+                                        fontSize: 17,
+                                      ),
+                                    ),
+                                  ),
+                                  Text(
+                                    DateFormat(
+                                      'dd MMM',
+                                      'id',
+                                    ).format(DateTime.now()),
+                                    style: TextStyle(
+                                      color: _palette.muted,
+                                      fontSize: 12,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 12),
+                              FittedBox(
+                                alignment: Alignment.centerLeft,
+                                fit: BoxFit.scaleDown,
+                                child: Text(
+                                  _rupiahFormat.format(
+                                    _stats['todaySales'] ?? 0,
+                                  ),
+                                  style: TextStyle(
+                                    color: _palette.accent,
+                                    fontSize: 30,
+                                    fontWeight: FontWeight.w800,
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(height: 16),
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: _DashboardMetric(
+                                      palette: _palette,
+                                      icon: Icons.receipt_long_rounded,
+                                      label: 'Transaksi',
+                                      value: '${_stats['todayCount'] ?? 0}',
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: _DashboardMetric(
+                                      palette: _palette,
+                                      icon: Icons.inventory_2_rounded,
+                                      label: 'Produk',
+                                      value: '${_stats['productCount'] ?? 0}',
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: _DashboardMetric(
+                                      palette: _palette,
+                                      icon: Icons.timer_rounded,
+                                      label: 'Shift aktif',
+                                      value: '${_stats['activeShifts'] ?? 0}',
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        Text(
+                          'Aksi cepat',
+                          style: Theme.of(context).textTheme.titleMedium
+                              ?.copyWith(
+                                color: _palette.text,
+                                fontWeight: FontWeight.w700,
+                              ),
+                        ),
+                        const SizedBox(height: 10),
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: [
+                            if (authState.isOwner)
+                              _DashboardQuickAction(
+                                palette: _palette,
+                                icon: Icons.point_of_sale_rounded,
+                                label: 'Buka kasir',
+                                primary: true,
+                                onTap: () => context.go('/cashier'),
+                              ),
+                            _DashboardQuickAction(
+                              palette: _palette,
+                              icon: Icons.inventory_2_outlined,
+                              label: 'Produk & stok',
+                              onTap: () => context.go('/master-data'),
+                            ),
+                            _DashboardQuickAction(
+                              palette: _palette,
+                              icon: Icons.assessment_outlined,
+                              label: 'Laporan',
+                              onTap: () => context.go('/report-center'),
+                            ),
+                            if (authState.isOwner)
+                              _DashboardQuickAction(
+                                palette: _palette,
+                                icon: Icons.shopping_bag_outlined,
+                                label: 'Pembelian',
+                                onTap: () => context.go('/purchase'),
+                              ),
+                          ],
+                        ),
+                        const SizedBox(height: 18),
+                        Container(
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            color: _palette.surface,
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(color: _palette.border),
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(
+                                Icons.warning_amber_rounded,
+                                color: _palette.accent,
+                              ),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    const Text(
+                                      'Peringatan stok rendah',
+                                      style: TextStyle(
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 3),
+                                    Text(
+                                      '${_stats['lowStockCount'] ?? 0} produk perlu diperiksa',
+                                      style: TextStyle(
+                                        color: _palette.muted,
+                                        fontSize: 13,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              TextButton(
+                                onPressed: () => context.go('/master-data'),
+                                child: const Text('Lihat'),
+                              ),
+                            ],
+                          ),
+                        ),
+                        if (authState.isOwner &&
+                            _stats['demoDataPresent'] != true) ...[
+                          const SizedBox(height: 16),
+                          Container(
+                            padding: const EdgeInsets.all(16),
+                            decoration: BoxDecoration(
+                              color: _palette.surface,
+                              borderRadius: BorderRadius.circular(16),
+                            ),
+                            child: Row(
+                              children: [
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        'Coba dengan data contoh',
+                                        style: TextStyle(
+                                          fontWeight: FontWeight.w700,
+                                        ),
+                                      ),
+                                      SizedBox(height: 4),
+                                      Text(
+                                        'Data contoh disimpan lokal di perangkat ini.',
+                                        style: TextStyle(
+                                          color: _palette.muted,
+                                          fontSize: 12,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                FilledButton(
+                                  onPressed: _isSeedingDemo
+                                      ? null
+                                      : _loadDemoData,
+                                  child: _isSeedingDemo
+                                      ? const SizedBox(
+                                          width: 18,
+                                          height: 18,
+                                          child: CircularProgressIndicator(
+                                            strokeWidth: 2,
+                                          ),
+                                        )
+                                      : const Text('Muat'),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                        const SizedBox(height: 20),
+                        Text(
+                          'Menu operasional',
+                          style: Theme.of(context).textTheme.titleMedium
+                              ?.copyWith(
+                                color: _palette.text,
+                                fontWeight: FontWeight.w700,
+                              ),
+                        ),
+                        const SizedBox(height: 10),
+                        for (final item in menuItems)
+                          Card(
+                            margin: const EdgeInsets.only(bottom: 8),
+                            color: _palette.surface,
+                            child: ListTile(
+                              leading: Container(
+                                width: 42,
+                                height: 42,
+                                decoration: BoxDecoration(
+                                  color: _palette.surfaceRaised,
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: Icon(item.icon, color: _palette.accent),
+                              ),
+                              title: Text(
+                                item.title,
+                                style: TextStyle(
+                                  color: _palette.text,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                              subtitle: Text(
+                                item.subtitle,
+                                style: TextStyle(color: _palette.muted),
+                              ),
+                              trailing: Icon(
+                                Icons.chevron_right_rounded,
+                                color: _palette.muted,
+                              ),
+                              onTap: item.route == '__dashboard_theme__'
+                                  ? _showDashboardPalettePicker
+                                  : () => context.go(item.route),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                ),
+        ),
       ),
     );
   }
+}
+
+class _DashboardMetric extends StatelessWidget {
+  const _DashboardMetric({
+    required this.palette,
+    required this.icon,
+    required this.label,
+    required this.value,
+  });
+
+  final _DashboardPalette palette;
+  final IconData icon;
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.all(10),
+    decoration: BoxDecoration(
+      color: palette.surfaceRaised,
+      borderRadius: BorderRadius.circular(12),
+    ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(icon, size: 17, color: palette.accent),
+        const SizedBox(height: 8),
+        Text(
+          value,
+          style: TextStyle(
+            color: palette.text,
+            fontSize: 16,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        Text(
+          label,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(fontSize: 11, color: palette.muted),
+        ),
+      ],
+    ),
+  );
+}
+
+class _DashboardQuickAction extends StatelessWidget {
+  const _DashboardQuickAction({
+    required this.palette,
+    required this.icon,
+    required this.label,
+    required this.onTap,
+    this.primary = false,
+  });
+
+  final _DashboardPalette palette;
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+  final bool primary;
+
+  @override
+  Widget build(BuildContext context) => FilledButton.tonalIcon(
+    onPressed: onTap,
+    icon: Icon(icon, size: 18),
+    label: Text(label),
+    style: FilledButton.styleFrom(
+      backgroundColor: primary ? palette.accent : palette.surfaceRaised,
+      foregroundColor: primary ? palette.accentText : palette.text,
+      minimumSize: const Size(48, 46),
+      padding: const EdgeInsets.symmetric(horizontal: 14),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+    ),
+  );
 }
 
 class _DashboardMenuItem {
@@ -690,60 +920,4 @@ class _DashboardMenuItem {
     required this.color,
     required this.route,
   });
-}
-
-class _StatCard extends StatelessWidget {
-  final String title;
-  final String value;
-  final IconData icon;
-  final Color color;
-
-  const _StatCard({
-    required this.title,
-    required this.value,
-    required this.icon,
-    required this.color,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return OwnerSurface(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(icon, color: color, size: 20),
-              const SizedBox(width: 6),
-              Expanded(
-                child: Text(
-                  title,
-                  style: const TextStyle(
-                    fontSize: 12,
-                    color: Color(0xFF586575),
-                  ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          FittedBox(
-            alignment: Alignment.centerLeft,
-            fit: BoxFit.scaleDown,
-            child: Text(
-              value,
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-                color: color,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
 }

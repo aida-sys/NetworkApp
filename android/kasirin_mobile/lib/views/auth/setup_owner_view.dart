@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../providers.dart';
+import '../owner/owner_widgets.dart';
 
 class SetupOwnerView extends ConsumerStatefulWidget {
   const SetupOwnerView({super.key});
@@ -71,7 +72,9 @@ class _SetupOwnerViewState extends ConsumerState<SetupOwnerView> {
       }
 
       // Log in immediately
-      ref.read(authNotifierProvider.notifier).setAuthenticated(
+      ref
+          .read(authNotifierProvider.notifier)
+          .setAuthenticated(
             userId: ownerId,
             username: _usernameController.text.trim(),
             fullName: _fullNameController.text.trim(),
@@ -81,11 +84,13 @@ class _SetupOwnerViewState extends ConsumerState<SetupOwnerView> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(demoDataError == null
-                ? (_includeDemoData
-                    ? 'Akun dan data demo berhasil dibuat. Kasir demo: kasir_demo / kasir123.'
-                    : 'Akun Pemilik berhasil dibuat! Selamat datang di Kasirin.')
-                : 'Akun dibuat, tetapi data demo gagal dimuat: $demoDataError'),
+            content: Text(
+              demoDataError == null
+                  ? (_includeDemoData
+                        ? 'Akun dan data demo berhasil dibuat. Kasir demo: kasir_demo / kasir123.'
+                        : 'Akun Pemilik berhasil dibuat! Selamat datang di Kasirin.')
+                  : 'Akun dibuat, tetapi data demo gagal dimuat: $demoDataError',
+            ),
             backgroundColor: demoDataError == null
                 ? const Color(0xFF18794E)
                 : const Color(0xFFB42318),
@@ -113,6 +118,7 @@ class _SetupOwnerViewState extends ConsumerState<SetupOwnerView> {
     return Scaffold(
       backgroundColor: const Color(0xFFF4F6F8),
       appBar: AppBar(title: const Text('Setup Toko & Akun Pemilik')),
+      bottomNavigationBar: const SafeArea(top: false, child: TrialBanner()),
       body: SafeArea(
         child: Center(
           child: SingleChildScrollView(
@@ -139,7 +145,8 @@ class _SetupOwnerViewState extends ConsumerState<SetupOwnerView> {
                               width: 48,
                               height: 48,
                               decoration: BoxDecoration(
-                                color: const Color(0xFF006EAE).withValues(alpha: 0.1),
+                                color: const Color(0xFF006EAE)
+                                    .withValues(alpha: 0.1),
                                 borderRadius: BorderRadius.circular(12),
                               ),
                               child: const Icon(
@@ -161,7 +168,9 @@ class _SetupOwnerViewState extends ConsumerState<SetupOwnerView> {
                                     ),
                                   ),
                                   Text(
-                                    'Setup akun Pemilik (Owner) pertama',
+                                    'Buat akun pemilik pertama untuk mulai menggunakan Kasirin.',
+                                    maxLines: 2,
+                                    softWrap: true,
                                     style: theme.textTheme.bodyMedium?.copyWith(
                                       color: const Color(0xFF586575),
                                     ),
@@ -178,14 +187,20 @@ class _SetupOwnerViewState extends ConsumerState<SetupOwnerView> {
                           Container(
                             padding: const EdgeInsets.all(12),
                             decoration: BoxDecoration(
-                              color: const Color(0xFFB42318).withValues(alpha: 0.1),
+                              color: const Color(0xFFB42318)
+                                  .withValues(alpha: 0.1),
                               borderRadius: BorderRadius.circular(8),
-                              border: Border.all(color: const Color(0xFFB42318)),
+                              border: Border.all(
+                                color: const Color(0xFFB42318),
+                              ),
                             ),
                             child: Row(
                               children: [
-                                const Icon(Icons.error_outline,
-                                    color: Color(0xFFB42318), size: 20),
+                                const Icon(
+                                  Icons.error_outline,
+                                  color: Color(0xFFB42318),
+                                  size: 20,
+                                ),
                                 const SizedBox(width: 8),
                                 Expanded(
                                   child: Text(
@@ -298,15 +313,17 @@ class _SetupOwnerViewState extends ConsumerState<SetupOwnerView> {
                           contentPadding: EdgeInsets.zero,
                           value: _includeDemoData,
                           controlAffinity: ListTileControlAffinity.leading,
-                          title: const Text('Isi data contoh untuk mencoba fitur'),
+                          title: const Text(
+                            'Isi data contoh untuk mencoba fitur',
+                          ),
                           subtitle: const Text(
                             'Produk, stok rendah, pembelian, harga grosir, dan transaksi penjualan.',
                           ),
                           onChanged: _isLoading
                               ? null
                               : (value) => setState(
-                                    () => _includeDemoData = value ?? false,
-                                  ),
+                                  () => _includeDemoData = value ?? false,
+                                ),
                         ),
                         const SizedBox(height: 28),
                         SizedBox(
@@ -326,8 +343,9 @@ class _SetupOwnerViewState extends ConsumerState<SetupOwnerView> {
                                     width: 22,
                                     child: CircularProgressIndicator(
                                       strokeWidth: 2,
-                                      valueColor:
-                                          AlwaysStoppedAnimation(Colors.white),
+                                      valueColor: AlwaysStoppedAnimation(
+                                        Colors.white,
+                                      ),
                                     ),
                                   )
                                 : const Text(
@@ -351,4 +369,3 @@ class _SetupOwnerViewState extends ConsumerState<SetupOwnerView> {
     );
   }
 }
-

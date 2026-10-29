@@ -17,8 +17,8 @@ Status captured 2026-10-24 from the active desktop services/tests and current mo
 | Financial initialization, accounts, balanced journals, expenses/payments | `../../app/services/financial_service.py`; `../../tests/test_financial_service.py` | Checkout creates baseline accounts and sale/COGS journal | Partial; no finance workflows/reports; zero/unknown purchase cost has no invented COGS |
 | Sales, inventory, attendance and financial reports | `../../app/services/report_service.py`; `../../app/services/report_periods.py`; `../../tests/test_reports.py`; `../../tests/test_attendance.py` | Owner overview of all-time sale count/value and low-stock count | Partial; not equivalent to desktop reports or period semantics |
 | Store profile, receipt and payment settings/wizard | `../../app/services/store_settings_service.py`; `../../app/services/payment_settings_service.py`; `../../app/services/payment_wizard_service.py`; `../../tests/test_store_settings.py`; `../../tests/test_payment_wizard.py` | Store name at initial setup; cash-only checkout | Partial; no settings wizard or other methods |
-| Trial, read-only mode, license documents | `../../app/services/trial_service.py`; `../../app/services/license_service.py`; `../../tests/test_trial_service.py`; `../../tests/test_license_service.py`; `../../tests/test_read_only_mode.py` | No mobile feature | Not implemented; Windows identity/verifier is not used |
-| Billing auth, device registration, subscription and license polling | `../../app/services/billing_client.py`; `../../server/app/main.py`; `../../tests/test_server_billing.py` | Dependencies exist, no billing client flow | Not implemented; current server contract is not platform-aware |
+| Trial, read-only mode, license documents | `../../app/services/trial_service.py`; `../../app/services/license_service.py`; `../../tests/test_trial_service.py`; `../../tests/test_license_service.py`; `../../tests/test_read_only_mode.py` | Persisted seven-day trial with clock rollback guard; expired-trial sales require an active server license | Partial; mobile checks server online at checkout and does not yet verify/store signed licenses for offline use |
+| Billing auth, device registration, subscription and license polling | `../../app/services/billing_client.py`; `../../server/app/main.py`; `../../tests/test_server_billing.py` | Securely stored billing account/device tokens, device registration, plan listing, hosted checkout, and polling | Implemented for online billing; payment confirmation depends on Midtrans and `/api/pos/license` |
 | Barcode camera, receipt printing, import/export and local backup | `../../app/hardware/`; `../../app/services/product_import_service.py`; `../../tests/test_printer.py`; `../../tests/test_product_import.py` | Search accepts typed/scanner-wedge text; no platform adapter | Partial for manual search only; hardware unverified |
 
 ## Next Work
@@ -27,7 +27,7 @@ Status captured 2026-10-24 from the active desktop services/tests and current mo
 2. Add safe password-hash compatibility/migration and domain permission guards before broader staff use.
 3. Complete shift closing, discounts/customers/multiple payment methods, refund, store and product CRUD.
 4. Implement purchase/inventory, finance and reports with desktop-source tests.
-5. Integrate the existing billing service only after auditing DTOs; platform-aware licensing requires backward-compatible server changes and Windows+mobile tests.
+5. Add mobile verification and offline storage for signed licenses, with Windows and Android contract coverage.
 6. Add supported file/hardware adapters and validate on real Android/iOS devices.
 
-The app stores POS data in its app-private local SQLite file. No transaction synchronization or billing integration is implemented. Desktop source under `../../app/` remains unchanged.
+The app stores POS data in its app-private local SQLite file. Transaction synchronization is not implemented; billing calls cover account, device, subscription and license only. Desktop source under `../../app/` remains unchanged.

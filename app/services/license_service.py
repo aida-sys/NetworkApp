@@ -26,6 +26,9 @@ PUBLIC_KEY_PATH = (
     / "core"
     / "license_public_key.pem"
 )
+ROTATED_PUBLIC_KEY_PATH = PUBLIC_KEY_PATH.with_name(
+    "license_public_key_v2.pem"
+)
 PRIVATE_KEY_PATH = (
     Path(os.getenv("LOCALAPPDATA", Path.home() / "AppData" / "Local"))
     / "POSPublisher"
@@ -259,21 +262,44 @@ class LicenseService:
 
         try:
             signature = base64.b64decode(signature_text, validate=True)
-            public_key = serialization.load_pem_public_key(
-                public_key_path.read_bytes()
-            )
-        except (ValueError, OSError) as exc:
+        except ValueError as exc:
             raise LicenseError(
                 "Data tanda tangan atau kunci publik tidak valid."
             ) from exc
-        if not isinstance(public_key, Ed25519PublicKey):
-            raise LicenseError("Kunci publik lisensi tidak didukung.")
-        try:
-            public_key.verify(signature, canonical_json(payload))
-        except InvalidSignature as exc:
+        key_paths = [public_key_path]
+        rotated_key_path = public_key_path.with_name(
+            ROTATED_PUBLIC_KEY_PATH.name
+        )
+        if public_key_path.resolve() == PUBLIC_KEY_PATH.resolve():
+            key_paths.append(rotated_key_path)
+        existing_key_paths = [path for path in key_paths if path.is_file()]
+        if not existing_key_paths:
+            raise LicenseError("Kunci publik lisensi tidak ditemukan.")
+        key_errors = []
+        for key_path in existing_key_paths:
+            try:
+                public_key = serialization.load_pem_public_key(
+                    key_path.read_bytes()
+                )
+            except (ValueError, OSError) as exc:
+                key_errors.append(exc)
+                continue
+            if not isinstance(public_key, Ed25519PublicKey):
+                key_errors.append(ValueError("Unsupported public key type"))
+                continue
+            try:
+                public_key.verify(signature, canonical_json(payload))
+                break
+            except InvalidSignature:
+                continue
+        else:
+            if len(key_errors) == len(existing_key_paths):
+                raise LicenseError(
+                    "Data tanda tangan atau kunci publik tidak valid."
+                ) from key_errors[0]
             raise LicenseError(
                 "Tanda tangan lisensi tidak cocok atau file telah diubah."
-            ) from exc
+            )
         return payload
 
     @staticmethod

@@ -5,11 +5,13 @@ from pathlib import Path
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QPixmap
 from PySide6.QtWidgets import (
+    QComboBox,
     QDialog,
     QFrame,
     QGridLayout,
     QHBoxLayout,
     QLabel,
+    QMessageBox,
     QPushButton,
     QScrollArea,
     QVBoxLayout,
@@ -19,6 +21,7 @@ from PySide6.QtWidgets import (
 from app.core.config import settings
 from app.models import Store
 from app.services.license_service import LicenseService
+from app.services.online_activation import CheckoutWorker, RenewalPollingWorker
 from app.services.subscription_info import (
     ROADMAP_PREVIEW_LIMIT,
     SubscriptionInfoWorker,
@@ -56,6 +59,8 @@ class DashboardView(QWidget):
         self._licensed = bool(licensed)
         self._license_service = license_service
         self._subscription_worker: SubscriptionInfoWorker | None = None
+        self._checkout_worker: CheckoutWorker | None = None
+        self._renewal_worker: RenewalPollingWorker | None = None
         self.subscription_info: dict | None = None
         self._activation_card: QFrame | None = None
         self._subscription_card: QFrame | None = None
@@ -363,6 +368,13 @@ class DashboardView(QWidget):
         worker = self._subscription_worker
         if worker is not None and worker.isRunning():
             worker.wait(3000)
+        renewal = self._renewal_worker
+        if renewal is not None and renewal.isRunning():
+            renewal.stop()
+            renewal.wait(3000)
+        checkout = self._checkout_worker
+        if checkout is not None and checkout.isRunning():
+            checkout.wait(3000)
 
     def _on_subscription_info(self, info: object) -> None:
         if isinstance(info, dict):
@@ -469,12 +481,118 @@ class DashboardView(QWidget):
         self._build_subscription_dialog(info).exec()
 
     def _renew_subscription(self) -> None:
-        """Perpanjangan: buka webserver billing; tanpa URL → jendela aktivasi."""
+        """Start hosted checkout when this installation has a billing session."""
+        service = self._get_license_service()
         base_url = (settings.billing_server_url or "").strip()
-        if base_url:
+        if service is None or not base_url:
+            self.activation_requested.emit()
+            return
+        data_dir = service.data_dir
+        try:
+            customer_token = (data_dir / "billing-customer-token.txt").read_text(
+                encoding="utf-8"
+            ).strip()
+            device_pk = int((data_dir / "billing-device-id.txt").read_text(
+                encoding="utf-8"
+            ).strip())
+            device_token = (data_dir / "billing-device-token.txt").read_text(
+                encoding="utf-8"
+            ).strip()
+        except (OSError, ValueError):
+            # Existing web checkout remains available for older installations.
             open_external_url(base_url)
             return
-        self.activation_requested.emit()
+        plans = (self.subscription_info or {}).get("plans") or []
+        if not plans:
+            open_external_url(base_url)
+            return
+        dialog = QDialog(self)
+        dialog.setWindowTitle("Pilih Paket Langganan")
+        dialog.setMinimumWidth(380)
+        layout = QVBoxLayout(dialog)
+        layout.addWidget(QLabel("Pilih paket yang ingin dibeli:"))
+        plan_input = QComboBox()
+        for plan in plans:
+            if not isinstance(plan, dict) or not plan.get("code"):
+                continue
+            label = f"{plan.get('name') or plan['code']} · {rupiah(int(plan.get('price_idr') or 0))}"
+            duration = plan.get("duration_days")
+            if duration:
+                label += f" · {duration} hari"
+            plan_input.addItem(label, str(plan["code"]))
+        layout.addWidget(plan_input)
+        buttons = QHBoxLayout()
+        buy_button = QPushButton("Lanjut ke Pembayaran")
+        cancel_button = QPushButton("Batal")
+        buy_button.setEnabled(bool(plan_input.count()))
+        buttons.addWidget(buy_button)
+        buttons.addWidget(cancel_button)
+        layout.addLayout(buttons)
+        cancel_button.clicked.connect(dialog.reject)
+        buy_button.clicked.connect(dialog.accept)
+        if dialog.exec() != QDialog.DialogCode.Accepted:
+            return
+        plan_code = str(plan_input.currentData() or "")
+        if not plan_code:
+            return
+        baseline = service.license_payload() or {}
+        self._begin_checkout(
+            base_url, customer_token, device_pk, device_token, plan_code, baseline
+        )
+
+    def _begin_checkout(
+        self, base_url: str, customer_token: str, device_pk: int,
+        device_token: str, plan_code: str, baseline: dict,
+    ) -> None:
+        worker = CheckoutWorker(
+            base_url, customer_token, device_pk, plan_code, parent=self
+        )
+        worker.succeeded.connect(
+            lambda result: self._on_renewal_checkout_ready(
+                result, base_url, device_token, baseline
+            )
+        )
+        worker.failed.connect(self._on_renewal_checkout_failed)
+        self._checkout_worker = worker
+        worker.start()
+
+    def _on_renewal_checkout_ready(
+        self, result: object, base_url: str, device_token: str, baseline: dict
+    ) -> None:
+        if not isinstance(result, dict) or not result.get("payment_url"):
+            QMessageBox.warning(self, "Pembayaran", "Server tidak mengembalikan tautan pembayaran.")
+            return
+        if not open_external_url(str(result["payment_url"])):
+            QMessageBox.warning(self, "Pembayaran", "Tautan pembayaran gagal dibuka.")
+            return
+        QMessageBox.information(
+            self, "Pembayaran dibuka",
+            "Selesaikan pembayaran di browser. POS akan memeriksa lisensi "
+            "secara otomatis setelah pembayaran terkonfirmasi.",
+        )
+        previous = self._renewal_worker
+        if previous is not None and previous.isRunning():
+            previous.stop()
+            previous.wait(1000)
+        worker = RenewalPollingWorker(base_url, device_token, baseline, parent=self)
+        worker.succeeded.connect(self._on_renewal_license_updated)
+        self._renewal_worker = worker
+        worker.start()
+
+    def _on_renewal_checkout_failed(self, message: str) -> None:
+        QMessageBox.warning(self, "Pembayaran gagal", message)
+
+    def _on_renewal_license_updated(self, document: object) -> None:
+        service = self._get_license_service()
+        if service is None or not isinstance(document, dict):
+            return
+        try:
+            service.activate_from_document(document)
+        except Exception as exc:  # noqa: BLE001
+            QMessageBox.warning(self, "Lisensi", f"Lisensi baru tidak dapat dipasang: {exc}")
+            return
+        self.refresh_subscription()
+        QMessageBox.information(self, "Langganan diperbarui", "Lisensi POS berhasil diperbarui.")
 
     @staticmethod
     def _subscription_detail_html(info: dict) -> str:

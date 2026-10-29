@@ -222,7 +222,7 @@ class MainWindow(QMainWindow):
         layout = QHBoxLayout(banner)
         layout.setContentsMargins(16, 8, 16, 8)
         layout.setSpacing(12)
-        label = QLabel(f"TRIAL — {message}")
+        label = QLabel(f"MODE TRIAL 7 HARI — {message}")
         label.setWordWrap(True)
         layout.addWidget(label, 1)
         button = QPushButton("Aktivasi Sekarang")

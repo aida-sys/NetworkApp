@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:intl/date_symbol_data_local.dart';
 
 import 'providers.dart';
 
@@ -16,6 +17,7 @@ class _KasirinAppState extends ConsumerState<KasirinApp> {
   @override
   void initState() {
     super.initState();
+    ref.read(trialStatusProvider.future);
     Future<void>.delayed(const Duration(milliseconds: 1800), () {
       if (mounted) setState(() => _startupComplete = true);
     });
@@ -116,5 +118,6 @@ class _StartupSplashState extends State<_StartupSplash>
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await initializeDateFormatting('id');
   runApp(const ProviderScope(child: KasirinApp()));
 }

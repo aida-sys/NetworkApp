@@ -57,6 +57,16 @@ def main() -> None:
         f"{public_key};app\\core",
         str(PROJECT_ROOT / "main.py"),
     ]
+    rotated_public_key = (
+        PROJECT_ROOT / "app" / "core" / "license_public_key_v2.pem"
+    )
+    if rotated_public_key.is_file():
+        script_argument = str(PROJECT_ROOT / "main.py")
+        script_index = arguments.index(script_argument)
+        arguments[script_index:script_index] = [
+            "--add-data",
+            f"{rotated_public_key};app\\core",
+        ]
     subprocess.run(arguments, cwd=PROJECT_ROOT, check=True)
     print(f"Build selesai: {PROJECT_ROOT / 'dist' / 'POS' / 'POS.exe'}")
     print("Database runtime dibuat terpisah di %LOCALAPPDATA%\\POSApp\\data.")

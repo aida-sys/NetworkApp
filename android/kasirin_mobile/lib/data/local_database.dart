@@ -1,10 +1,8 @@
-import 'dart:io';
-
 import 'package:drift/drift.dart';
-import 'package:drift/native.dart';
-import 'package:path/path.dart' as p;
-import 'package:path_provider/path_provider.dart';
-import 'package:sqlite3/sqlite3.dart' as sqlite;
+
+import 'database_connection.dart'
+    if (dart.library.io) 'database_connection_native.dart'
+    if (dart.library.js_interop) 'database_connection_web.dart' as connection;
 
 const _schemaStatements = <String>[
   '''CREATE TABLE roles (
@@ -433,7 +431,7 @@ class KasirinDatabase extends GeneratedDatabase {
   KasirinDatabase(super.executor);
 
   factory KasirinDatabase.memory() =>
-      KasirinDatabase(NativeDatabase.memory(setup: _configureSqlite));
+      KasirinDatabase(connection.createMemoryExecutor());
 
   @override
   int get schemaVersion => 4;
@@ -485,19 +483,7 @@ class KasirinDatabase extends GeneratedDatabase {
 }
 
 Future<KasirinDatabase> openKasirinDatabase() async {
-  final directory = await getApplicationSupportDirectory();
-  final database = KasirinDatabase(
-    NativeDatabase.createInBackground(
-      File(p.join(directory.path, 'kasirin.db')),
-      setup: _configureSqlite,
-    ),
-  );
+  final database = KasirinDatabase(await connection.openExecutor());
   await database.customSelect('SELECT 1').get();
   return database;
-}
-
-void _configureSqlite(sqlite.Database database) {
-  database.execute('PRAGMA foreign_keys = ON');
-  database.execute('PRAGMA journal_mode = WAL');
-  database.execute('PRAGMA busy_timeout = 5000');
 }

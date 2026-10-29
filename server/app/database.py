@@ -76,6 +76,14 @@ def _run_light_migrations(session_factory: sessionmaker[Session]) -> None:
                         "telegram_chat_id VARCHAR(50)"
                     )
                 )
+        if "orders" in inspector.get_table_names():
+            columns = {col["name"] for col in inspector.get_columns("orders")}
+            if "snap_redirect_url" not in columns:
+                conn.execute(
+                    text(
+                        "ALTER TABLE orders ADD COLUMN snap_redirect_url VARCHAR(500)"
+                    )
+                )
 
 
 def seed_admin(

@@ -273,6 +273,7 @@ def _attach_snap_token(
             notification_url=notification_url,
         )
         order.snap_token = result["token"]
+        order.snap_redirect_url = result.get("redirect_url")
         session.commit()
     except MidtransSnapError:
         # Log tapi jangan gagalkan checkout — user tetap bisa "Cek Status" nanti.

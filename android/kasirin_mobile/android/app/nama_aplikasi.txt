@@ -1,0 +1,19 @@
+android {
+    ...
+    buildTypes {
+        release {
+            // TODO: Tambahkan konfigurasi signing release Anda di sini jika ada
+            
+            // Script untuk kustomisasi nama file APK output
+            applicationVariants.all { variant ->
+                variant.outputs.all { output ->
+                    if (variant.buildType.name == "release") {
+                        // Ganti "NamaAplikasiSukaSuka" dengan nama yang Anda inginkan
+                        // variant.versionName mengambil versi dari pubspec.yaml (misal: 1.0.0)
+                        outputFileName = "NamaAplikasiSukaSuka-v${variant.versionName}-release.apk"
+                    }
+                }
+            }
+        }
+    }
+}

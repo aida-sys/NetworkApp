@@ -157,6 +157,7 @@ class Order(Base):
     amount_idr: Mapped[int] = mapped_column(Integer, nullable=False)
     status: Mapped[str] = mapped_column(String(20), default="pending", nullable=False)
     snap_token: Mapped[str | None] = mapped_column(String(64))
+    snap_redirect_url: Mapped[str | None] = mapped_column(String(500))
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utc_now, nullable=False
     )

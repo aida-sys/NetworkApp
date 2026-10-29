@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../providers.dart';
+import '../owner/owner_widgets.dart';
 
 class LoginView extends ConsumerStatefulWidget {
   const LoginView({super.key});
@@ -72,7 +73,9 @@ class _LoginViewState extends ConsumerState<LoginView> {
       final fullName = result.read<String>('full_name');
       final userId = result.read<int>('id');
 
-      ref.read(authNotifierProvider.notifier).setAuthenticated(
+      ref
+          .read(authNotifierProvider.notifier)
+          .setAuthenticated(
             userId: userId,
             username: username,
             fullName: fullName,
@@ -127,6 +130,7 @@ class _LoginViewState extends ConsumerState<LoginView> {
     return Scaffold(
       backgroundColor: const Color(0xFFF4F6F8),
       appBar: AppBar(title: const Text('Masuk Kasirin')),
+      bottomNavigationBar: const SafeArea(top: false, child: TrialBanner()),
       body: SafeArea(
         child: Center(
           child: SingleChildScrollView(
@@ -229,8 +233,9 @@ class _LoginViewState extends ConsumerState<LoginView> {
                                   width: 22,
                                   child: CircularProgressIndicator(
                                     strokeWidth: 2,
-                                    valueColor:
-                                        AlwaysStoppedAnimation(Colors.white),
+                                    valueColor: AlwaysStoppedAnimation(
+                                      Colors.white,
+                                    ),
                                   ),
                                 )
                               : const Text(
@@ -246,7 +251,10 @@ class _LoginViewState extends ConsumerState<LoginView> {
                       Center(
                         child: TextButton.icon(
                           onPressed: () => context.go('/setup'),
-                          icon: const Icon(Icons.settings_backup_restore, size: 16),
+                          icon: const Icon(
+                            Icons.settings_backup_restore,
+                            size: 16,
+                          ),
                           label: const Text(
                             'Setup Toko Baru',
                             style: TextStyle(fontSize: 13),

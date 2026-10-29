@@ -3,6 +3,7 @@ from pathlib import Path
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
     QFileDialog,
+    QComboBox,
     QFormLayout,
     QHBoxLayout,
     QLabel,
@@ -17,8 +18,10 @@ from PySide6.QtWidgets import (
 from app.core.config import settings
 from app.services.billing_client import BillingError
 from app.services.license_service import LicenseError, LicenseService
-from app.services.online_activation import OnlineActivationWorker
+from app.services.online_activation import CheckoutWorker, OnlineActivationWorker
 from app.ui.theme import PALETTE
+from app.utils.browser import open_external_url
+from app.utils.formatters import rupiah
 from app.ui.widgets import create_copyright_label
 
 
@@ -50,6 +53,9 @@ class LicenseView(QWidget):
         # Kredensial online terakhir (untuk auto-login ke dashboard).
         # password disimpan hanya di memori selama proses aktivasi.
         self._pending_online_auth: dict | None = None
+        self._checkout_worker: CheckoutWorker | None = None
+        self._customer_token = ""
+        self._device_pk: int | None = None
         self.activated_online_user: dict | None = None
         self._online_form: QFormLayout | None = None
         self._confirm_label: QWidget | None = None
@@ -77,10 +83,11 @@ class LicenseView(QWidget):
 
         description = QLabel(
             "Lisensi POS Retail diterbitkan untuk satu instalasi komputer. "
-            "Beli atau perpanjang langganan melalui website penerbit, lalu "
-            "unduh file lisensi (.poslic) dan impor melalui jendela ini. "
-            "Setelah lisensi terpasang, POS dapat digunakan tanpa koneksi "
-            "internet. Data toko tetap tersimpan di komputer ini."
+            "Pilih paket dan bayar melalui aktivasi online untuk mengaktifkan "
+            "lisensi otomatis. Pembelian melalui website tetap didukung; "
+            "gunakan tombol cek pembayaran setelah membayar. Lisensi aktif "
+            "juga dapat dipasang dari file .poslic. Data toko tetap tersimpan "
+            "di komputer ini."
         )
         description.setWordWrap(True)
         root.addWidget(description)
@@ -221,6 +228,14 @@ class LicenseView(QWidget):
         """Email akun webserver pemilik device_token (tanpa password)."""
         return self.license_service.data_dir / "billing-device-email.txt"
 
+    @property
+    def _customer_token_file(self) -> Path:
+        return self.license_service.data_dir / "billing-customer-token.txt"
+
+    @property
+    def _device_id_file(self) -> Path:
+        return self.license_service.data_dir / "billing-device-id.txt"
+
     def _build_online_section(self, tabs: QTabWidget) -> None:
         page = QWidget()
         layout = QVBoxLayout(page)
@@ -229,7 +244,8 @@ class LicenseView(QWidget):
 
         hint = QLabel(
             "Masuk atau buat akun di Server aplikasi. Permintaan lisensi terkirim "
-            "otomatis dan POS akan mengaktifkan diri setelah pembayaran "
+            "otomatis. Setelah perangkat terhubung, pilih paket untuk membuka "
+            "pembayaran di browser; POS mengaktifkan lisensi setelah pembayaran "
             "terdeteksi. Sudah bayar lewat website? Klik "
             "\u201cSaya Sudah Bayar \u2014 Cek & Aktifkan\u201d di bawah."
         )
@@ -300,6 +316,15 @@ class LicenseView(QWidget):
         self.online_button.clicked.connect(self._start_online_activation)
         layout.addWidget(self.online_button)
         self._online_widgets.append(self.online_button)
+        self.plan_input = QComboBox()
+        self.plan_input.setEnabled(False)
+        layout.addWidget(self.plan_input)
+        self._online_widgets.append(self.plan_input)
+        self.checkout_button = QPushButton("Pilih Paket & Bayar")
+        self.checkout_button.setEnabled(False)
+        self.checkout_button.clicked.connect(self._start_checkout)
+        layout.addWidget(self.checkout_button)
+        self._online_widgets.append(self.checkout_button)
         layout.addStretch(1)
 
         tabs.addTab(page, "Aktivasi Online")
@@ -360,6 +385,110 @@ class LicenseView(QWidget):
             ).strip()
         except OSError:
             return ""
+
+    def _read_billing_session(self) -> tuple[str, int | None]:
+        try:
+            customer_token = self._customer_token_file.read_text(
+                encoding="utf-8"
+            ).strip()
+            device_pk = int(self._device_id_file.read_text(
+                encoding="utf-8"
+            ).strip())
+            return customer_token, device_pk
+        except (OSError, ValueError):
+            return "", None
+
+    def _on_device_ready(self, data: object) -> None:
+        if not isinstance(data, dict):
+            return
+        self._customer_token = str(data.get("customer_token") or "")
+        try:
+            self._device_pk = int(data.get("device_pk"))
+        except (TypeError, ValueError):
+            self._device_pk = None
+        self.plan_input.clear()
+        for plan in data.get("plans") or []:
+            if not isinstance(plan, dict) or not plan.get("code"):
+                continue
+            name = str(plan.get("name") or plan["code"])
+            price = int(plan.get("price_idr") or 0)
+            duration = plan.get("duration_days")
+            label = f"{name} · {rupiah(price)}"
+            if duration:
+                label += f" · {duration} hari"
+            self.plan_input.addItem(label, str(plan["code"]))
+        ready = bool(
+            self._customer_token and self._device_pk and self.plan_input.count()
+        )
+        self.plan_input.setEnabled(ready)
+        self.checkout_button.setEnabled(ready)
+        if ready:
+            self.online_status.setText(
+                "Perangkat terhubung. Pilih paket untuk memulai pembayaran; "
+                "POS akan aktif otomatis setelah pembayaran terkonfirmasi."
+            )
+
+    def _start_checkout(self) -> None:
+        if self._checkout_worker is not None and self._checkout_worker.isRunning():
+            return
+        plan_code = str(self.plan_input.currentData() or "")
+        if not (self._customer_token and self._device_pk and plan_code):
+            self.online_status.setText(
+                "Masuk dan daftarkan perangkat sebelum memilih paket."
+            )
+            return
+        self.checkout_button.setEnabled(False)
+        self.online_status.setText("Menyiapkan pembayaran…")
+        worker = CheckoutWorker(
+            settings.billing_server_url or "",
+            self._customer_token,
+            self._device_pk,
+            plan_code,
+            parent=self,
+        )
+        worker.succeeded.connect(self._on_checkout_ready)
+        worker.failed.connect(self._on_checkout_failed)
+        self._checkout_worker = worker
+        worker.start()
+
+    def _on_checkout_ready(self, result: object) -> None:
+        self.checkout_button.setEnabled(True)
+        if not isinstance(result, dict):
+            self.online_status.setText("Respons pembayaran tidak valid.")
+            return
+        payment_url = str(result.get("payment_url") or "").strip()
+        if not payment_url:
+            self.online_status.setText(
+                "Server tidak mengembalikan tautan pembayaran."
+            )
+            return
+        try:
+            opened = open_external_url(payment_url)
+            if not opened:
+                self.online_status.setText("Tautan pembayaran gagal dibuka.")
+                return
+            self.online_status.setText(
+                "Halaman pembayaran dibuka di browser. Selesaikan pembayaran; "
+                "POS akan memeriksa status dan aktif otomatis."
+            )
+            if self._worker is None or not self._worker.isRunning():
+                device_token = self._read_saved_device_token()
+                if not device_token:
+                    return
+                email = self._read_saved_device_email()
+                self._pending_online_auth = {
+                    "email": email,
+                    "password": "",
+                    "store_name": self.store_name_input.text().strip() or "Toko Saya",
+                    "register": False,
+                }
+                self._start_worker(device_token=device_token)
+        except Exception as exc:  # noqa: BLE001
+            self.online_status.setText(f"Gagal membuka halaman pembayaran: {exc}")
+
+    def _on_checkout_failed(self, message: str) -> None:
+        self.checkout_button.setEnabled(True)
+        self.online_status.setText(message)
 
     def _check_paid_now(self) -> None:
         """Tombol eksplisit: cek pembayaran sekarang lalu aktifkan.
@@ -446,6 +575,7 @@ class LicenseView(QWidget):
         token = self._read_saved_device_token()
         if not token:
             return
+        self._customer_token, self._device_pk = self._read_billing_session()
         email = self._read_saved_device_email()
         if email:
             self._pending_online_auth = {
@@ -488,11 +618,15 @@ class LicenseView(QWidget):
             posreq_content=posreq_content,
             device_token=device_token,
             token_file=self._device_token_file,
+            session_dir=self.license_service.data_dir,
+            device_pk=self._device_pk,
+            customer_token=self._customer_token,
             register_first=register_first,
             store_name=store_name,
             parent=self,
         )
         worker.status.connect(self._on_worker_status)
+        worker.device_ready.connect(self._on_device_ready)
         worker.succeeded.connect(self._on_worker_succeeded)
         worker.failed.connect(self._on_worker_failed)
         self._worker = worker
@@ -532,6 +666,8 @@ class LicenseView(QWidget):
         if self._worker is not None and self._worker.isRunning():
             self._worker.stop()
             self._worker.wait(3000)
+        if self._checkout_worker is not None and self._checkout_worker.isRunning():
+            self._checkout_worker.wait(3000)
         # Tutup jendela (X) harus berperilaku sama dengan tombol
         # "Kembali ke Aplikasi" saat dibuka dari dashboard owner,
         # supaya tidak keluar dari aplikasi.

@@ -2,7 +2,6 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:http/http.dart' as http;
-import 'package:kasirin_mobile/domain/pos_repository.dart';
 
 import 'billing_config.dart' as config;
 
@@ -11,29 +10,46 @@ class BillingClient {
 
   final config.BillingConfig _billingConfig;
 
-  String get _baseUrl => _billingConfig.baseUrl.replaceAll(
-        RegExp(r'/$'),
-        '',
-      );
+  String get _baseUrl => _billingConfig.baseUrl.replaceAll(RegExp(r'/$'), '');
 
   Uri _uri(String path) => Uri.parse('$_baseUrl$path');
 
   /// Default headers for JSON API requests.
   Map<String, String> get _defaultHeaders => {
-        'Content-Type': 'application/json',
-        'Accept': 'application/json',
-      };
+    'Content-Type': 'application/json',
+    'Accept': 'application/json',
+    // Free ngrok tunnels return an HTML interstitial unless API clients opt out.
+    'ngrok-skip-browser-warning': '1',
+  };
 
   /// Helper method to handle HTTP responses uniformly.
   dynamic _handleResponse(http.Response response) {
-    if (response.statusCode >= 200 && response.statusCode < 300) {
-      if (response.body.isEmpty) return null;
-      return jsonDecode(response.body);
-    } else {
+    final isSuccess = response.statusCode >= 200 && response.statusCode < 300;
+    if (response.body.isEmpty) {
+      if (isSuccess) return null;
+      throw Exception('Server error: HTTP ${response.statusCode}.');
+    }
+    dynamic decoded;
+    try {
+      decoded = jsonDecode(response.body);
+    } on FormatException {
+      final contentType = response.headers['content-type'] ?? '';
+      if (contentType.contains('text/html')) {
+        throw Exception(
+          'Server billing mengirim halaman web, bukan respons API. '
+          'Periksa URL billing server dan tunnel.',
+        );
+      }
       throw Exception(
-        'Server error: ${response.statusCode} - ${response.reasonPhrase}',
+        'Respons server bukan JSON (HTTP ${response.statusCode}).',
       );
     }
+    if (isSuccess) return decoded;
+    final detail = decoded is Map ? decoded['detail']?.toString() : null;
+    throw Exception(
+      'Server error: HTTP ${response.statusCode}'
+      '${detail == null || detail.isEmpty ? '' : ' — $detail'}',
+    );
   }
 
   /// Check whether the server is reachable.
@@ -56,18 +72,22 @@ class BillingClient {
     required String installationId,
     required String deviceId,
     required String storeName,
-    required int customerId,
+    required String customerToken,
   }) async {
     final response = await http
         .post(
           _uri('/api/pos/register'),
-          headers: _defaultHeaders,
+          headers: {
+            ..._defaultHeaders,
+            'Authorization': 'Bearer $customerToken',
+          },
           body: jsonEncode({
             'posreq': jsonEncode({
+              'schema_version': 1,
+              'product': 'POS Retail',
               'installation_id': installationId,
               'device_id': deviceId,
               'store_name': storeName,
-              'customer_id': customerId,
             }),
           }),
         )
@@ -77,91 +97,81 @@ class BillingClient {
   }
 
   /// Check the license status of the current device.
-  Future<dynamic> checkLicense({
-    required String bearerToken,
-  }) async {
+  Future<dynamic> checkLicense({required String bearerToken}) async {
     final response = await http
         .get(
           _uri('/api/pos/license'),
-          headers: {
-            ..._defaultHeaders,
-            'Authorization': 'Bearer $bearerToken',
-          },
+          headers: {..._defaultHeaders, 'Authorization': 'Bearer $bearerToken'},
         )
         .timeout(const Duration(seconds: 10));
 
+    return _handleResponse(response);
+  }
+
+  Future<dynamic> loginCustomer({
+    required String email,
+    required String password,
+  }) async {
+    final response = await http
+        .post(
+          _uri('/api/auth/login'),
+          headers: _defaultHeaders,
+          body: jsonEncode({'email': email, 'password': password}),
+        )
+        .timeout(const Duration(seconds: 12));
+    return _handleResponse(response);
+  }
+
+  Future<dynamic> registerCustomer({
+    required String email,
+    required String password,
+    required String storeName,
+  }) async {
+    final response = await http
+        .post(
+          _uri('/api/auth/register'),
+          headers: _defaultHeaders,
+          body: jsonEncode({
+            'email': email,
+            'password': password,
+            'store_name': storeName,
+          }),
+        )
+        .timeout(const Duration(seconds: 12));
+    return _handleResponse(response);
+  }
+
+  Future<dynamic> getPlans() async {
+    final response = await http
+        .get(_uri('/api/pos/status'), headers: _defaultHeaders)
+        .timeout(const Duration(seconds: 10));
+    return _handleResponse(response);
+  }
+
+  Future<dynamic> createLicenseCheckout({
+    required String customerToken,
+    required int devicePk,
+    required String planCode,
+  }) async {
+    final response = await http
+        .post(
+          _uri('/api/checkout/create'),
+          headers: {
+            ..._defaultHeaders,
+            'Authorization': 'Bearer $customerToken',
+          },
+          body: jsonEncode({'device_pk': devicePk, 'plan_code': planCode}),
+        )
+        .timeout(const Duration(seconds: 20));
     return _handleResponse(response);
   }
 
   /// Get device status and subscription information.
-  Future<dynamic> getDeviceStatus({
-    required String bearerToken,
-  }) async {
+  Future<dynamic> getDeviceStatus({required String bearerToken}) async {
     final response = await http
         .get(
           _uri('/api/pos/status'),
-          headers: {
-            ..._defaultHeaders,
-            'Authorization': 'Bearer $bearerToken',
-          },
-        )
-        .timeout(const Duration(seconds: 10));
-
-    return _handleResponse(response);
-  }
-
-  /// Create a checkout order on the server.
-  Future<dynamic> createCheckout({
-    required String invoiceNo,
-    required int cashierId,
-    required int shiftId,
-    required List<CartItemInput> items,
-    required String paymentMethod,
-    required int paymentAmount,
-    required String customerEmail,
-    required String customerName,
-  }) async {
-    final body = {
-      'invoiceNo': invoiceNo,
-      'cashierId': cashierId,
-      'shiftId': shiftId,
-      'items': items
-          .map(
-            (item) => {
-              'productId': item.productId,
-              'quantity': item.quantity,
-            },
-          )
-          .toList(),
-      'paymentMethod': paymentMethod,
-      'paymentAmount': paymentAmount,
-      'customerEmail': customerEmail,
-      'customerName': customerName,
-    };
-
-    final response = await http
-        .post(
-          _uri('/api/checkout/create'),
-          headers: _defaultHeaders,
-          body: jsonEncode(body),
-        )
-        .timeout(const Duration(seconds: 15));
-
-    return _handleResponse(response);
-  }
-
-  /// Forward a payment notification payload to the server.
-  Future<dynamic> mapMidtransNotification({
-    required String provider,
-    required dynamic payload,
-  }) async {
-    final safeProvider = Uri.encodeComponent(provider);
-    
-    final response = await http
-        .post(
-          _uri('/api/payment/notification/$safeProvider'),
-          headers: _defaultHeaders,
-          body: jsonEncode(payload),
+          headers: {..._defaultHeaders, 'Authorization': 'Bearer $bearerToken'},
         )
         .timeout(const Duration(seconds: 10));
 

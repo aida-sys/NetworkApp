@@ -103,16 +103,28 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         platform = platforms_by_id.get(platform_id)
         if platform is None:
             return None
+        configured_path = app_settings.resolved_installer_path_for(platform_id)
+        if configured_path is not None and configured_path.is_file():
+            return configured_path
         storage_dir = installer_storage_path()
         for extension in platform["extensions"]:
             candidate = storage_dir / f"{platform_id}{extension}"
             if candidate.is_file():
                 return candidate
-        if platform_id == "windows":
-            legacy_path = app_settings.resolved_installer_path
-            if legacy_path.is_file():
-                return legacy_path
         return None
+
+    def installer_download_filename(platform_id: str, installer: Path) -> str:
+        extensions = sorted(
+            platforms_by_id[platform_id]["extensions"],
+            key=len,
+            reverse=True,
+        )
+        lower_name = installer.name.lower()
+        extension = next(
+            (item for item in extensions if lower_name.endswith(item.lower())),
+            installer.suffix,
+        )
+        return f"Kasirin{extension}"
 
     def installer_catalog() -> list[dict]:
         catalog = []
@@ -1004,7 +1016,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         return FileResponse(
             installer,
             media_type="application/octet-stream",
-            filename=installer.name,
+            filename=installer_download_filename(platform_id, installer),
         )
 
     # ------------------------------------------------- pos machine endpoints
@@ -1209,6 +1221,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             "amount_idr": order.amount_idr,
             "status": order.status,
             "snap_token": order.snap_token,
+            "payment_url": order.snap_redirect_url,
         }
 
     @app.post("/webhooks/payment/{provider}")

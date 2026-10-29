@@ -85,6 +85,7 @@ class Application:
             trial_active, trial_message = self.trial_service.status()
             if trial_active:
                 logger.info("POS running in trial mode: %s", trial_message)
+                self.login.set_trial_status(trial_message)
                 self.login.show()
             else:
                 logger.info("POS license required: %s %s", status, trial_message)
@@ -178,6 +179,7 @@ class Application:
 
     def on_license_activated(self):
         logger.info("POS license activated")
+        self.login.set_trial_status(None)
         online_user = getattr(
             self.license_view, "activated_online_user", None
         )

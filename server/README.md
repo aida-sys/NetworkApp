@@ -73,8 +73,17 @@ tersebut, atau buat pasangan baru:
 python -c "from app.services.license_service import generate_license_keypair; from pathlib import Path; generate_license_keypair(Path('billing-private.pem'), Path('billing-public.pem'), 'kata-sandi-anda')"
 ```
 
-Jika membuat pasangan baru, ganti juga public key di
-`app/core/license_public_key.pem` dan terbitkan ulang lisensi lama.
+Untuk rotasi yang tetap memverifikasi lisensi lama, jalankan:
+
+```powershell
+python scripts\rotate_license_signing_key.py
+```
+
+Skrip mempertahankan kunci lama, membuat private key v2 terenkripsi di luar
+repository, dan memperbarui `server/.env`. Public key v2 akan dipercaya oleh
+build POS baru bersama kunci lama. Pelanggan perlu memasang build baru sebelum
+lisensi yang ditandatangani dengan kunci v2 dapat diaktifkan. Simpan backup
+private key dan `server/.env` dengan aman; jangan commit atau kirim keduanya.
 
 ## Endpoint
 

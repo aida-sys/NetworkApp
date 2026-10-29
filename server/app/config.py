@@ -33,7 +33,14 @@ class Settings(BaseSettings):
     # `python -m server.seed_admin`. Ganti di server/.env untuk produksi.
     admin_email: str = "admin@pos.local"
     admin_password: str = "admin12345"
-    installer_path: Path = BASE_DIR.parent / "build" / "installer_v3" / "Kasirin.exe"
+    # Keep the default aligned with scripts/build_installer.py output.
+    # The download endpoint presents this artifact as Kasirin.exe.
+    installer_path: Path = (
+        BASE_DIR.parent / "build" / "installer_v3" / "AnjayRetailSoft.exe"
+    )
+    installer_path_windows: Path | None = None
+    installer_path_android: Path | None = None
+    installer_path_macos: Path | None = None
     # Nomor WhatsApp admin untuk bantuan / hotline aktivasi lisensi offline
     admin_whatsapp: str = "6281234567890"
     # Nama bank yang ditampilkan pada panel ATM/transfer simulasi.
@@ -142,6 +149,19 @@ class Settings(BaseSettings):
     @property
     def resolved_installer_path(self) -> Path:
         path = Path(self.installer_path).expanduser()
+        if not path.is_absolute():
+            path = BASE_DIR.parent / path
+        return path
+
+    def resolved_installer_path_for(self, platform_id: str) -> Path | None:
+        configured = {
+            "windows": self.installer_path_windows,
+            "android": self.installer_path_android,
+            "macos": self.installer_path_macos,
+        }.get(platform_id)
+        if configured is None or not str(configured).strip():
+            return self.resolved_installer_path if platform_id == "windows" else None
+        path = Path(configured).expanduser()
         if not path.is_absolute():
             path = BASE_DIR.parent / path
         return path

@@ -89,6 +89,16 @@ class LoginView(QWidget):
         self.update_store_profile(store)
         add_card_shadow(self.store_profile, offset=6, blur=24)
 
+        self.trial_status_label = QLabel()
+        self.trial_status_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.trial_status_label.setWordWrap(True)
+        self.trial_status_label.setStyleSheet(
+            "background: #b45309; color: white; font-size: 14px; "
+            "font-weight: 700; padding: 10px 14px; border-radius: 8px;"
+        )
+        self.trial_status_label.hide()
+        root.addWidget(self.trial_status_label)
+
         self.username = QLineEdit()
         self.password = QLineEdit()
         self.password.setEchoMode(QLineEdit.Password)
@@ -214,6 +224,13 @@ class LoginView(QWidget):
         self.username.clear()
         self.password.clear()
         self.username.setFocus()
+
+    def set_trial_status(self, message: str | None) -> None:
+        if message:
+            self.trial_status_label.setText(f"MODE TRIAL 7 HARI — {message}")
+            self.trial_status_label.show()
+        else:
+            self.trial_status_label.hide()
 
     def _create_owner(self):
         if self.setup_service is None:
