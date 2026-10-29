@@ -21,7 +21,21 @@ flutter analyze
 flutter test
 flutter run
 flutter build apk --debug
+flutter build web --release --no-web-resources-cdn
 ```
+
+The web release is written to `build/web`. `--no-web-resources-cdn` bundles
+Flutter's rendering engine with the app, so the page does not depend on Google's
+CDN being reachable. Serve the folder over HTTP or HTTPS; do not open
+`build/web/index.html` as a `file://` URL because browsers block the database
+WASM and worker there. For a local preview, run this from `android/kasirin_mobile/`:
+
+```powershell
+python -m http.server 8080 --directory build/web --bind 127.0.0.1
+```
+
+Then open `http://localhost:8080`. Browser data is stored locally in that
+browser profile and is separate from the Android database.
 
 Or using the convenience script at `android/start_flutter1.ps1`.
 

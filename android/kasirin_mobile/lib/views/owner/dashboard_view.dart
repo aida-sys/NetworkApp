@@ -1,11 +1,10 @@
-import 'dart:io';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
 import '../../providers.dart';
+import '../../platform/store_media.dart';
 import 'owner_widgets.dart';
 
 class _DashboardPalette {
@@ -382,10 +381,7 @@ class _DashboardViewState extends ConsumerState<DashboardView> {
         ),
         child: Scaffold(
           backgroundColor: _palette.background,
-          bottomNavigationBar: const SafeArea(
-            top: false,
-            child: TrialBanner(),
-          ),
+          bottomNavigationBar: const SafeArea(top: false, child: TrialBanner()),
           drawer: Drawer(
             backgroundColor: _palette.surface,
             child: SafeArea(
@@ -506,9 +502,9 @@ class _DashboardViewState extends ConsumerState<DashboardView> {
                               CircleAvatar(
                                 radius: 25,
                                 backgroundColor: _palette.surfaceRaised,
-                                backgroundImage: _storeLogoPath == null
-                                    ? null
-                                    : FileImage(File(_storeLogoPath!)),
+                                backgroundImage: storeImageProvider(
+                                  _storeLogoPath,
+                                ),
                                 child: _storeLogoPath == null
                                     ? Icon(
                                         Icons.storefront_rounded,

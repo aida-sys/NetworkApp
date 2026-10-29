@@ -6,9 +6,9 @@ import 'package:crypto/crypto.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
-import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../platform/billing_platform.dart';
 import '../../providers.dart';
 
 class LicenseView extends ConsumerStatefulWidget {
@@ -19,7 +19,6 @@ class LicenseView extends ConsumerStatefulWidget {
 
 class _LicenseViewState extends ConsumerState<LicenseView>
     with WidgetsBindingObserver {
-  static const _paymentChannel = MethodChannel('com.kasirin/payment');
   final _email = TextEditingController();
   final _password = TextEditingController();
   final _store = TextEditingController(text: 'Toko Kasirin');
@@ -116,19 +115,17 @@ class _LicenseViewState extends ConsumerState<LicenseView>
       'store_name': storeName,
       'requested_at': DateTime.now().toUtc().toIso8601String(),
     });
-    return _paymentChannel.invokeMethod<String>('savePosRequest', {
-      'filename': 'permintaan-lisensi.posreq',
-      'content': request,
-    });
+    return savePosRequest(
+      filename: 'permintaan-lisensi.posreq',
+      content: request,
+    );
   }
 
   Future<void> _openBillingDashboard() async {
     final baseUrl = ref.read(billingConfigProvider).baseUrl;
     final dashboardUri = Uri.parse(baseUrl)
         .replace(path: '/dashboard', query: null, fragment: null);
-    await _paymentChannel.invokeMethod<void>('openUrl', {
-      'url': dashboardUri.toString(),
-    });
+    await openExternalUrl(dashboardUri.toString());
   }
 
   Future<void> _saveRequestAndOpenDashboard() async {
@@ -337,9 +334,7 @@ class _LicenseViewState extends ConsumerState<LicenseView>
       if (uri == null || uri.scheme != 'https') {
         throw Exception('Tautan pembayaran dari server tidak valid.');
       }
-      await _paymentChannel.invokeMethod<void>('openUrl', {
-        'url': uri.toString(),
-      });
+      await openExternalUrl(uri.toString());
       _pollTimer?.cancel();
       _pollTimer = Timer.periodic(
         const Duration(seconds: 10),

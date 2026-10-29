@@ -1,12 +1,9 @@
-import 'dart:io';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:path/path.dart' as p;
-import 'package:path_provider/path_provider.dart';
 
+import '../../platform/store_media.dart';
 import '../../providers.dart';
 import 'owner_widgets.dart';
 
@@ -173,18 +170,8 @@ class _StoreSettingsViewState extends ConsumerState<StoreSettingsView> {
         maxWidth: banner ? 1800 : 1000,
       );
       if (picked == null || !mounted) return;
-      final support = await getApplicationSupportDirectory();
-      final mediaDirectory = Directory(p.join(support.path, 'store_media'));
-      await mediaDirectory.create(recursive: true);
       final suffix = banner ? 'banner' : 'logo';
-      final extension = p.extension(picked.path).isEmpty
-          ? '.jpg'
-          : p.extension(picked.path);
-      final destination = p.join(
-        mediaDirectory.path,
-        '${suffix}_${DateTime.now().microsecondsSinceEpoch}$extension',
-      );
-      await File(picked.path).copy(destination);
+      final destination = await persistStoreImage(picked, kind: suffix);
       setState(() {
         if (banner) {
           _bannerPath = destination;
@@ -471,7 +458,8 @@ class _ImageUploadCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final hasImage = path != null && File(path!).existsSync();
+    final imageProvider = storeImageProvider(path);
+    final hasImage = storeImageExists(path);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -483,7 +471,7 @@ class _ImageUploadCard extends StatelessWidget {
             height: height,
             width: double.infinity,
             child: hasImage
-                ? Image.file(File(path!), fit: BoxFit.cover)
+                ? Image(image: imageProvider!, fit: BoxFit.cover)
                 : ColoredBox(
                     color: const Color(0xFFF0F4F7),
                     child: Icon(icon, color: ownerMuted, size: 34),
